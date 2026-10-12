@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "TaleScrawl.Cli": {
+      "commandName": "Project",
+      "commandLineArgs": "c:\\dev\\TaleScrawl\\mindflayer.ds"
+    }
+  }
+}
