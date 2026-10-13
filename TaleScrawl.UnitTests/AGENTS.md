@@ -19,4 +19,6 @@ Unit tests using NUnit with BDD-style testing conventions.
 - [When] methods are named `<Action>IsCalled`
 - [Then] methods are named `Should<Outcome>`.
   - `ShouldNotThrow`, `ShouldReturnFoo`, `ShouldReturnNull`
-
+- Test cases are named `Given<fact>`
+  - GivenHappyPath
+  - GivenFileExists

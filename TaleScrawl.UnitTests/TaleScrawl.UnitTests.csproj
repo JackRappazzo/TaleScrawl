@@ -30,6 +30,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\TaleScrawl.Core\TaleScrawl.Core.csproj" />
+    <ProjectReference Include="..\TaleScrawl.Cli\TaleScrawl.Cli.csproj" />
   </ItemGroup>
 
 </Project>

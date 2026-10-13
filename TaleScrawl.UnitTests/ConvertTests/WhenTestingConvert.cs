@@ -1,4 +1,4 @@
-using TaleScrawl.Core.Ds;
+using TaleScrawl.Core.DungeonScrawl;
 using LeapingGorilla.Testing.Core.Attributes;
 
 namespace TaleScrawl.UnitTests.ConvertTests

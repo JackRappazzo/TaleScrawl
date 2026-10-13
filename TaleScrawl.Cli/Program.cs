@@ -1,84 +1,40 @@
 ﻿using System;
-using System.Globalization;
 using System.IO;
+using System.Threading.Tasks;
+using TaleScrawl.Cli;
 using TaleScrawl.Core;
-using TaleScrawl.Core.Options;
 using TextCopy;
 
 return await Run(args);
 
 static async Task<int> Run(string[] args)
 {
-    if (args.Length == 0)
+    ParseResult parsed = CliParser.Parse(args);
+
+    if (parsed.ShowHelp)
     {
-        PrintUsage();
-        return 1;
+        PrintUsage(Console.Out);
+        return 0;
     }
 
-    string input = args[0];
-    if (!File.Exists(input))
+    if (parsed.Arguments is not { } cli)
     {
-        Console.Error.WriteLine($"File not found: {input}");
-        return 1;
+        Console.Error.WriteLine($"Error: {parsed.Error}");
+        Console.Error.WriteLine();
+        PrintUsage(Console.Error);
+        return 2;   // usage error
     }
 
-    var options = new SlabOptions();
-    string? output = null;
-    bool noClipboard = false;
-
-    for (int i = 1; i < args.Length; i++)
+    if (!File.Exists(cli.InputPath))
     {
-        switch (args[i])
-        {
-            case "--output" when i + 1 < args.Length:
-                output = args[++i];
-                break;
-            case "--floor-guid" when i + 1 < args.Length:
-                options.FloorGuid = Guid.Parse(args[++i]);
-                break;
-            case "--scale" when i + 1 < args.Length:
-                options.Scale = double.Parse(args[++i], CultureInfo.InvariantCulture);
-                break;
-            case "--height" when i + 1 < args.Length:
-                options.FloorHeight = double.Parse(args[++i], CultureInfo.InvariantCulture);
-                break;
-            case "--flip-x":
-                options.FlipX = true;
-                break;
-            case "--wrap":
-                options.WrapInBackticks = true;
-                break;
-            case "--no-clipboard":
-                noClipboard = true;
-                break;
-            default:
-                Console.Error.WriteLine($"Unknown argument: {args[i]}");
-                return 1;
-        }
+        Console.Error.WriteLine($"File not found: {cli.InputPath}");
+        return 1;
     }
 
     try
     {
-        var converter = new TaleScrawlConverter(options);
-        string slab = converter.Convert(input);
-
-        if (output != null)
-        {
-            File.WriteAllText(output, slab);
-            Console.Error.WriteLine($"Wrote slab ({slab.Length} chars) to {output}");
-        }
-
-        if (!noClipboard)
-        {
-            await ClipboardService.SetTextAsync(slab);
-            Console.Error.WriteLine($"Copied slab ({slab.Length} chars) to clipboard.");
-        }
-        else if (output == null)
-        {
-            Console.WriteLine(slab);
-        }
-
-        return 0;
+        string slab = new TaleScrawlConverter(cli.Slab).Convert(cli.InputPath);
+        return await Deliver(slab, cli);
     }
     catch (Exception ex)
     {
@@ -87,16 +43,60 @@ static async Task<int> Run(string[] args)
     }
 }
 
-static void PrintUsage()
+// Writes the slab to every requested destination. A clipboard failure is a warning,
+// not an error, and stdout is the fallback so the slab is never lost.
+static async Task<int> Deliver(string slab, CliArguments cli)
 {
-    Console.Error.WriteLine("Usage: TaleScrawl <input.ds> [options]");
-    Console.Error.WriteLine();
-    Console.Error.WriteLine("Options:");
-    Console.Error.WriteLine("  --output <path>       Write slab code to a file");
-    Console.Error.WriteLine("  --no-clipboard        Do not copy the result to the clipboard");
-    Console.Error.WriteLine("  --floor-guid <guid>   Override the floor tile GUID");
-    Console.Error.WriteLine("  --scale <value>       Tile units per grid cell (default 1)");
-    Console.Error.WriteLine("  --height <value>      Floor Y height (default 0)");
-    Console.Error.WriteLine("  --flip-x              Mirror the X axis");
-    Console.Error.WriteLine("  --wrap                Wrap output in triple backticks");
+    bool delivered = false;
+
+    if (cli.OutputPath != null)
+    {
+        string? dir = Path.GetDirectoryName(Path.GetFullPath(cli.OutputPath));
+        if (!string.IsNullOrEmpty(dir))
+        {
+            Directory.CreateDirectory(dir);
+        }
+
+        await File.WriteAllTextAsync(cli.OutputPath, slab);
+        Console.Error.WriteLine($"Wrote slab ({slab.Length} chars) to {cli.OutputPath}");
+        delivered = true;
+    }
+
+    if (cli.CopyToClipboard)
+    {
+        try
+        {
+            await ClipboardService.SetTextAsync(slab);
+            Console.Error.WriteLine($"Copied slab ({slab.Length} chars) to clipboard.");
+            delivered = true;
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Warning: could not copy to clipboard ({ex.Message}).");
+        }
+    }
+
+    if (!delivered)
+    {
+        Console.WriteLine(slab);
+    }
+
+    return 0;
+}
+
+static void PrintUsage(TextWriter w)
+{
+    w.WriteLine("Usage: TaleScrawl <input.ds> [options]");
+    w.WriteLine();
+    w.WriteLine("Options:");
+    w.WriteLine("  --output <path>       Write slab code to a file");
+    w.WriteLine("  --no-clipboard        Do not copy the result to the clipboard");
+    w.WriteLine("  --floor-guid <guid>   Override the floor tile GUID");
+    w.WriteLine("  --wall-guid <guid>    Override the wall tile GUID");
+    w.WriteLine("  --corner-guid <guid>  Override the corner tile GUID");
+    w.WriteLine("  --floor-only          Emit floor tiles only (no walls or corners)");
+    w.WriteLine("  --scale <value>       Tile units per grid cell (default 1, must be > 0)");
+    w.WriteLine("  --height <value>      Floor Y height (default 0)");
+    w.WriteLine("  --wrap                Wrap output in triple backticks");
+    w.WriteLine("  -h, --help            Show this help");
 }
